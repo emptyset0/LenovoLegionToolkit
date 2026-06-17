@@ -26,20 +26,49 @@ jobs:
         cache-dependency-path: '**/*.csproj'
     - name: Restore
       run: dotnet restore
-    - name: Restore identity package signing key
+    - name: Prepare identity package signing key
       env:
         LLT_CERT_PFX: ${{ secrets.LLT_CERT_PFX }}
+        LLT_CERT_PASSWORD: ${{ secrets.LLT_CERT_PASSWORD }}
       run: |
-        if (-not $env:LLT_CERT_PFX) {
-          Write-Error "Missing LLT_CERT_PFX secret. The identity MSIX package cannot be signed."
-          exit 1
+        function Add-GitHubEnv {
+          param(
+            [Parameter(Mandatory)]
+            [string]$Name,
+
+            [Parameter(Mandatory)]
+            [string]$Value
+          )
+
+          $delimiter = "EOF_$([guid]::NewGuid().ToString("N"))"
+          Add-Content -Path $env:GITHUB_ENV -Value "$Name<<$delimiter"
+          Add-Content -Path $env:GITHUB_ENV -Value $Value
+          Add-Content -Path $env:GITHUB_ENV -Value $delimiter
         }
 
-        [IO.File]::WriteAllBytes("LenovoLegionToolkit.pfx", [Convert]::FromBase64String($env:LLT_CERT_PFX))
+        if ($env:LLT_CERT_PFX -and $env:LLT_CERT_PASSWORD) {
+          [IO.File]::WriteAllBytes("LenovoLegionToolkit.pfx", [Convert]::FromBase64String($env:LLT_CERT_PFX))
+          Add-GitHubEnv -Name "LLT_CERT_PASSWORD" -Value $env:LLT_CERT_PASSWORD
+          return
+        }
+
+        Write-Warning "LLT_CERT_PFX or LLT_CERT_PASSWORD secret is missing. Generating a temporary CI signing certificate."
+
+        $password = [guid]::NewGuid().ToString("N")
+        $securePassword = ConvertTo-SecureString -String $password -AsPlainText -Force
+        $cert = New-SelfSignedCertificate `
+          -Type CodeSigningCert `
+          -Subject "CN=LenovoLegionToolkit" `
+          -FriendlyName "Lenovo Legion Toolkit CI" `
+          -KeyExportPolicy Exportable `
+          -CertStoreLocation "Cert:\CurrentUser\My"
+
+        Export-PfxCertificate -Cert $cert -FilePath "LenovoLegionToolkit.pfx" -Password $securePassword | Out-Null
+        Export-Certificate -Cert $cert -FilePath "LenovoLegionToolkit.cer" | Out-Null
+        Remove-Item "Cert:\CurrentUser\My\$($cert.Thumbprint)" -Force
+        Add-GitHubEnv -Name "LLT_CERT_PASSWORD" -Value $password
       shell: powershell
     - name: Build
-      env:
-        LLT_CERT_PASSWORD: ${{ secrets.LLT_CERT_PASSWORD }}
       run: .\make_action.bat
     - name: Verify installer
       run: |
