@@ -13,8 +13,22 @@ public static partial class WMI
 {
     public static class LenovoGpuOverclockingData
     {
-        public static Task<IEnumerable<GPUOverclockCapabilityData>> ReadAsync() => WMI.ReadAsync("root\\WMI",
-            $"SELECT * FROM LENOVO_GPU_OVERCLOCKING_DATA",
+        public static Task<bool> ExistsClassAsync() => WMI.ClassExistsAsync("root\\WMI", "LENOVO_GPU_OVERCLOCKING_DATA");
+
+        public static Task<IEnumerable<GPUOverclockCapabilityData>> ReadAsync() =>
+            ReadGpuOverclockingDataAsync("LENOVO_GPU_OVERCLOCKING_DATA");
+    }
+
+    public static class LenovoGameZoneGpuOCData
+    {
+        public static Task<bool> ExistsClassAsync() => WMI.ClassExistsAsync("root\\WMI", "LENOVO_GAMEZONE_GPU_OC_DATA");
+
+        public static Task<IEnumerable<GPUOverclockCapabilityData>> ReadAsync() =>
+            ReadGpuOverclockingDataAsync("LENOVO_GAMEZONE_GPU_OC_DATA");
+    }
+
+    private static Task<IEnumerable<GPUOverclockCapabilityData>> ReadGpuOverclockingDataAsync(string className) => WMI.ReadAsync("root\\WMI",
+            $"SELECT * FROM {className}",
             pdc => new GPUOverclockCapabilityData(
                 GetInt32(pdc, "ClockID"),
                 GetInt32(pdc, "PStateID"),
@@ -26,13 +40,12 @@ public static partial class WMI
                 GetInt32(pdc, "OCOffsetScale"),
                 GetInt32(pdc, "OCOffsetFreq")));
 
-        private static int GetInt32(PropertyDataCollection properties, string propertyName)
-        {
-            var property = properties
-                .Cast<PropertyData>()
-                .FirstOrDefault(p => p.Name.Equals(propertyName, StringComparison.InvariantCultureIgnoreCase));
+    private static int GetInt32(PropertyDataCollection properties, string propertyName)
+    {
+        var property = properties
+            .Cast<PropertyData>()
+            .FirstOrDefault(p => p.Name.Equals(propertyName, StringComparison.InvariantCultureIgnoreCase));
 
-            return property?.Value is null ? 0 : Convert.ToInt32(property.Value);
-        }
+        return property?.Value is null ? 0 : Convert.ToInt32(property.Value);
     }
 }

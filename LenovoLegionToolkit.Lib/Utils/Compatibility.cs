@@ -793,8 +793,12 @@ public static partial class Compatibility
             string.Join(", ", await WMI.LenovoCapabilityData00.ReadAsync().ConfigureAwait(false))).ConfigureAwait(false);
         await AppendDiagnosticAsync(sb, "LENOVO_CAPABILITY_DATA_01.Ranges", async () =>
             string.Join(", ", await WMI.LenovoCapabilityData01.ReadAsync().ConfigureAwait(false))).ConfigureAwait(false);
+        await AppendDiagnosticAsync(sb, "LENOVO_GPU_OVERCLOCKING_DATA.ClassExists", WMI.LenovoGpuOverclockingData.ExistsClassAsync).ConfigureAwait(false);
+        await AppendDiagnosticAsync(sb, "LENOVO_GAMEZONE_GPU_OC_DATA.ClassExists", WMI.LenovoGameZoneGpuOCData.ExistsClassAsync).ConfigureAwait(false);
         await AppendDiagnosticAsync(sb, "LENOVO_GPU_OVERCLOCKING_DATA.Ranges", async () =>
             string.Join(", ", await WMI.LenovoGpuOverclockingData.ReadAsync().ConfigureAwait(false))).ConfigureAwait(false);
+        await AppendDiagnosticAsync(sb, "LENOVO_GAMEZONE_GPU_OC_DATA.Ranges", async () =>
+            string.Join(", ", await WMI.LenovoGameZoneGpuOCData.ReadAsync().ConfigureAwait(false))).ConfigureAwait(false);
 
         await AppendDiagnosticAsync(sb, "IsSupportGpuOC", WMI.LenovoGameZoneData.IsSupportGpuOCAsync).ConfigureAwait(false);
         await AppendDiagnosticAsync(sb, "IsSupportOD", WMI.LenovoGameZoneData.IsSupportODAsync).ConfigureAwait(false);

@@ -25,6 +25,23 @@ public static partial class WMI
         }
     }
 
+    private static async Task<bool> ClassExistsAsync(string scope, string className)
+    {
+        try
+        {
+            return await Task.Run(() =>
+            {
+                using var managementClass = new ManagementClass(scope, className, null);
+                managementClass.Get();
+                return true;
+            }).ConfigureAwait(false);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     private static LambdaDisposable Listen(string scope, FormattableString query, Action<PropertyDataCollection> handler)
     {
         var queryFormatted = query.ToString(WMIPropertyValueFormatter.Instance);

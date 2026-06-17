@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using LenovoLegionToolkit.Lib.Listeners;
@@ -20,6 +21,7 @@ public class GPUOverclockController
     private const int DefaultMaxMemoryDeltaMhz = 2000;
     private const int NvidiaGraphicsClockId = 0;
     private const int NvidiaMemoryClockId = 4;
+    private const string YogaPro14sMachineType = "83BU";
 
     private readonly GPUOverclockSettings _settings;
     private readonly VantageDisabler _vantageDisabler;
@@ -75,25 +77,28 @@ public class GPUOverclockController
             var supportGpuOc = await WMI.LenovoGameZoneData.IsSupportGpuOCAsync().ConfigureAwait(false);
             isSupported = supportGpuOc > 0;
             Log.Instance.Trace($"IsSupportGpuOC returned {supportGpuOc}.");
-
-            if (!isSupported)
-            {
-                Log.Instance.Trace($"Clearing settings...");
-
-                _settings.Store.Enabled = false;
-                _settings.Store.Info = GPUOverclockInfo.Zero;
-                _settings.SynchronizeStore();
-            }
-            else
-            {
-                var maxDeltaMhz = await GetMaxDeltaMhzAsync().ConfigureAwait(false);
-                Log.Instance.Trace($"GPU OC max delta: {maxDeltaMhz}.");
-            }
         }
         catch (Exception ex)
         {
             Log.Instance.Trace($"GPU OC support query failed.", ex);
             isSupported = false;
+        }
+
+        if (!isSupported)
+            isSupported = await IsYogaPro14s83BUGpuOcFallbackSupportedAsync().ConfigureAwait(false);
+
+        if (!isSupported)
+        {
+            Log.Instance.Trace($"Clearing settings...");
+
+            _settings.Store.Enabled = false;
+            _settings.Store.Info = GPUOverclockInfo.Zero;
+            _settings.SynchronizeStore();
+        }
+        else
+        {
+            var maxDeltaMhz = await GetMaxDeltaMhzAsync().ConfigureAwait(false);
+            Log.Instance.Trace($"GPU OC max delta: {maxDeltaMhz}.");
         }
 
         Log.Instance.Trace($"Supports GPU OC status: {isSupported}");
@@ -218,26 +223,63 @@ public class GPUOverclockController
     {
         var defaultMax = new GPUOverclockInfo(DefaultMaxCoreDeltaMhz, DefaultMaxMemoryDeltaMhz);
 
+        var capabilities = await ReadGpuOverclockCapabilitiesAsync().ConfigureAwait(false);
+        if (capabilities.Length == 0)
+        {
+            Log.Instance.Trace($"GPU OC capability data is empty. Using defaults.");
+            return defaultMax;
+        }
+
+        Log.Instance.Trace($"GPU OC capability data: {string.Join("; ", capabilities)}");
+
+        var core = GetMaxDeltaMhzFromCapabilities(capabilities, NvidiaGraphicsClockId, DefaultMaxCoreDeltaMhz, 1000);
+        var memory = GetMaxDeltaMhzFromCapabilities(capabilities, NvidiaMemoryClockId, DefaultMaxMemoryDeltaMhz, 5000);
+
+        return new(core, memory);
+    }
+
+    private static async Task<bool> IsYogaPro14s83BUGpuOcFallbackSupportedAsync()
+    {
         try
         {
-            var capabilities = (await WMI.LenovoGpuOverclockingData.ReadAsync().ConfigureAwait(false)).ToArray();
-            if (capabilities.Length == 0)
-            {
-                Log.Instance.Trace($"GPU OC capability data is empty. Using defaults.");
-                return defaultMax;
-            }
+            var machineInformation = await Compatibility.GetMachineInformationAsync().ConfigureAwait(false);
+            if (!machineInformation.MachineType.Equals(YogaPro14sMachineType, StringComparison.InvariantCultureIgnoreCase))
+                return false;
 
-            Log.Instance.Trace($"GPU OC capability data: {string.Join("; ", capabilities)}");
-
-            var core = GetMaxDeltaMhzFromCapabilities(capabilities, NvidiaGraphicsClockId, DefaultMaxCoreDeltaMhz, 1000);
-            var memory = GetMaxDeltaMhzFromCapabilities(capabilities, NvidiaMemoryClockId, DefaultMaxMemoryDeltaMhz, 5000);
-
-            return new(core, memory);
+            var lenovoGpuOcClassExists = await WMI.LenovoGpuOverclockingData.ExistsClassAsync().ConfigureAwait(false);
+            var gameZoneGpuOcClassExists = await WMI.LenovoGameZoneGpuOCData.ExistsClassAsync().ConfigureAwait(false);
+            var isSupported = lenovoGpuOcClassExists || gameZoneGpuOcClassExists;
+            Log.Instance.Trace($"YogaPro 14s 83BU GPU OC fallback status: {isSupported}. [LENOVO_GPU_OVERCLOCKING_DATA={lenovoGpuOcClassExists}, LENOVO_GAMEZONE_GPU_OC_DATA={gameZoneGpuOcClassExists}]");
+            return isSupported;
         }
         catch (Exception ex)
         {
-            Log.Instance.Trace($"GPU OC capability data unavailable. Using defaults.", ex);
-            return defaultMax;
+            Log.Instance.Trace($"YogaPro 14s 83BU GPU OC fallback check failed.", ex);
+            return false;
+        }
+    }
+
+    private static async Task<GPUOverclockCapabilityData[]> ReadGpuOverclockCapabilitiesAsync()
+    {
+        var capabilities = await TryReadGpuOverclockCapabilitiesAsync("LENOVO_GPU_OVERCLOCKING_DATA", WMI.LenovoGpuOverclockingData.ReadAsync).ConfigureAwait(false);
+        if (capabilities.Length > 0)
+            return capabilities;
+
+        return await TryReadGpuOverclockCapabilitiesAsync("LENOVO_GAMEZONE_GPU_OC_DATA", WMI.LenovoGameZoneGpuOCData.ReadAsync).ConfigureAwait(false);
+    }
+
+    private static async Task<GPUOverclockCapabilityData[]> TryReadGpuOverclockCapabilitiesAsync(string source, Func<Task<IEnumerable<GPUOverclockCapabilityData>>> readAsync)
+    {
+        try
+        {
+            var capabilities = (await readAsync().ConfigureAwait(false)).ToArray();
+            Log.Instance.Trace($"GPU OC capability source '{source}' returned {capabilities.Length} entries.");
+            return capabilities;
+        }
+        catch (Exception ex)
+        {
+            Log.Instance.Trace($"GPU OC capability source '{source}' unavailable.", ex);
+            return [];
         }
     }
 
