@@ -62,7 +62,7 @@
                 </Grid.RowDefinitions>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="84" />
+                    <ColumnDefinition Width="126" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
 
@@ -85,10 +85,10 @@
                     x:Name="_coreNumberBox"
                     Grid.Row="1"
                     Grid.Column="1"
+                    Width="116"
                     Margin="8,8,4,0"
                     AcceptsExpression="False"
                     ClearButtonEnabled="False"
-                    HorizontalContentAlignment="Right"
                     MaxDecimalPlaces="0"
                     Minimum="0"
                     TextChanged="CoreNumberBox_OnTextChanged"
@@ -120,10 +120,10 @@
                     x:Name="_memoryNumberBox"
                     Grid.Row="3"
                     Grid.Column="1"
+                    Width="116"
                     Margin="8,8,4,0"
                     AcceptsExpression="False"
                     ClearButtonEnabled="False"
-                    HorizontalContentAlignment="Right"
                     MaxDecimalPlaces="0"
                     Minimum="0"
                     TextChanged="MemoryNumberBox_OnTextChanged"
