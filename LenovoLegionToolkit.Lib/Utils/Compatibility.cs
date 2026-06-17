@@ -35,6 +35,11 @@ public static partial class Compatibility
     private static readonly string FakeMachineInformationPath = Path.Combine(Folders.AppData, "fake_mi.json");
     public static bool FakeMachineInformationMode { get; private set; } = false;
 
+    private static readonly string[] AllowedMachineTypes =
+    [
+        "83BU"
+    ];
+
     private static readonly string[] AllowedModelsPrefix = [
         // Legion Go
         "8APU1",
@@ -124,7 +129,9 @@ public static partial class Compatibility
 
         { "83G0", LegionSeries.Legion_9 }, { "83EY", LegionSeries.Legion_9 },
 
-        { "83E1", LegionSeries.Legion_Go }
+        { "83E1", LegionSeries.Legion_Go },
+
+        { "83BU", LegionSeries.YOGA }
     };
 
     private static readonly (string Keyword, LegionSeries Series)[] ModelKeywordMap =
@@ -159,7 +166,9 @@ public static partial class Compatibility
         bool isAllowedModel = AllowedModelsPrefix.Any(prefix =>
             mi.Model.Contains(prefix, StringComparison.InvariantCultureIgnoreCase));
 
-        bool isCompatible = isBasicCompatible || (isAllowedVendor && isAllowedModel);
+        bool isAllowedMachineType = AllowedMachineTypes.Contains(mi.MachineType, StringComparer.InvariantCultureIgnoreCase);
+
+        bool isCompatible = isBasicCompatible || (isAllowedVendor && (isAllowedModel || isAllowedMachineType));
 
         return (isCompatible, mi);
     }
@@ -761,8 +770,76 @@ public static partial class Compatibility
         var sb = new StringBuilder();
         sb.AppendLine("Retrieved machine information:");
         sb.Append(FormatMachineInformation(info));
+        if (IsYogaPro14s83BU(info))
+        {
+            await AppendYogaPro14s83BUDiagnosticsAsync(sb).ConfigureAwait(false);
+        }
 
         Log.Instance.Trace($"{sb}");
+    }
+
+    private static bool IsYogaPro14s83BU(MachineInformation info) =>
+        info.MachineType.Equals("83BU", StringComparison.InvariantCultureIgnoreCase);
+
+    private static async Task AppendYogaPro14s83BUDiagnosticsAsync(StringBuilder sb)
+    {
+        sb.AppendLine("YogaPro 14s 83BU diagnostics:");
+
+        await AppendDiagnosticAsync(sb, "LENOVO_GAMEZONE_DATA.Exists", WMI.LenovoGameZoneData.ExistsAsync).ConfigureAwait(false);
+        await AppendDiagnosticAsync(sb, "LENOVO_OTHER_METHOD.Exists", WMI.LenovoOtherMethod.ExistsAsync).ConfigureAwait(false);
+        await AppendDiagnosticAsync(sb, "LENOVO_LIGHTING_DATA.Exists", WMI.LenovoLightingData.ExistsAnyAsync).ConfigureAwait(false);
+
+        await AppendDiagnosticAsync(sb, "LENOVO_CAPABILITY_DATA_00.IDs", async () =>
+            string.Join(", ", await WMI.LenovoCapabilityData00.ReadAsync().ConfigureAwait(false))).ConfigureAwait(false);
+        await AppendDiagnosticAsync(sb, "LENOVO_CAPABILITY_DATA_01.Ranges", async () =>
+            string.Join(", ", await WMI.LenovoCapabilityData01.ReadAsync().ConfigureAwait(false))).ConfigureAwait(false);
+        await AppendDiagnosticAsync(sb, "LENOVO_GPU_OVERCLOCKING_DATA.Ranges", async () =>
+            string.Join(", ", await WMI.LenovoGpuOverclockingData.ReadAsync().ConfigureAwait(false))).ConfigureAwait(false);
+
+        await AppendDiagnosticAsync(sb, "IsSupportGpuOC", WMI.LenovoGameZoneData.IsSupportGpuOCAsync).ConfigureAwait(false);
+        await AppendDiagnosticAsync(sb, "IsSupportOD", WMI.LenovoGameZoneData.IsSupportODAsync).ConfigureAwait(false);
+        await AppendDiagnosticAsync(sb, "IsSupportSmartFan", WMI.LenovoGameZoneData.IsSupportSmartFanAsync).ConfigureAwait(false);
+        await AppendDiagnosticAsync(sb, "IsSupportIGPUMode", WMI.LenovoGameZoneData.IsSupportIGPUModeAsync).ConfigureAwait(false);
+        await AppendDiagnosticAsync(sb, "IsSupportGSync", WMI.LenovoGameZoneData.IsSupportGSyncAsync).ConfigureAwait(false);
+        await AppendDiagnosticAsync(sb, "IsACFitForOC", WMI.LenovoGameZoneData.IsACFitForOCAsync).ConfigureAwait(false);
+        await AppendDiagnosticAsync(sb, "DGPUHWId", WMI.LenovoGameZoneData.GetDGPUHWIdAsync).ConfigureAwait(false);
+
+        await AppendDiagnosticAsync(sb, "Get_Legion_Device_Support_Feature", WMI.LenovoOtherMethod.GetLegionDeviceSupportFeatureAsync).ConfigureAwait(false);
+        await AppendDiagnosticAsync(sb, "Get_Device_Current_Support_Feature", WMI.LenovoOtherMethod.GetDeviceCurrentSupportFeatureAsync).ConfigureAwait(false);
+    }
+
+    private static async Task AppendDiagnosticAsync<T>(StringBuilder sb, string name, Func<Task<T>> action)
+    {
+        try
+        {
+            var result = await action().ConfigureAwait(false);
+            sb.AppendLine($" * {name}: '{FormatDiagnosticValue(result)}'");
+        }
+        catch (Exception ex)
+        {
+            sb.AppendLine($" * {name}: <Error: {FormatDiagnosticException(ex)}>");
+        }
+    }
+
+    private static string FormatDiagnosticValue<T>(T value)
+    {
+        if (value is null)
+            return "null";
+
+        if (value is string str)
+            return str;
+
+        if (value is IEnumerable enumerable)
+            return string.Join(", ", enumerable.Cast<object>());
+
+        return value.ToString() ?? string.Empty;
+    }
+
+    private static string FormatDiagnosticException(Exception ex)
+    {
+        var baseException = ex.GetBaseException();
+        var message = baseException.Message.Replace(Environment.NewLine, " ");
+        return $"{baseException.GetType().Name}: {message}";
     }
 
     private static string FormatMachineInformation(MachineInformation info)

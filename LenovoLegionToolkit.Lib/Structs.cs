@@ -374,6 +374,41 @@ public readonly struct GPUOverclockInfo(int coreDeltaMhz, int memoryDeltaMhz)
     }
 }
 
+public readonly struct GPUOverclockCapabilityData(
+    int clockId,
+    int pStateId,
+    int gpuType,
+    int mode,
+    int defaultValue,
+    int minOffset,
+    int maxOffset,
+    int offsetScale,
+    int offsetFrequency)
+{
+    public int ClockId { get; } = clockId;
+    public int PStateId { get; } = pStateId;
+    public int GpuType { get; } = gpuType;
+    public int Mode { get; } = mode;
+    public int DefaultValue { get; } = defaultValue;
+    public int MinOffset { get; } = minOffset;
+    public int MaxOffset { get; } = maxOffset;
+    public int OffsetScale { get; } = offsetScale;
+    public int OffsetFrequency { get; } = offsetFrequency;
+
+    public override string ToString()
+    {
+        return $"{nameof(ClockId)}: {ClockId}," +
+               $" {nameof(PStateId)}: {PStateId}," +
+               $" {nameof(GpuType)}: {GpuType}," +
+               $" {nameof(Mode)}: {Mode}," +
+               $" {nameof(DefaultValue)}: {DefaultValue}," +
+               $" {nameof(MinOffset)}: {MinOffset}," +
+               $" {nameof(MaxOffset)}: {MaxOffset}," +
+               $" {nameof(OffsetScale)}: {OffsetScale}," +
+               $" {nameof(OffsetFrequency)}: {OffsetFrequency}";
+    }
+}
+
 public readonly struct FakeMachineInformation
 {
     public string? Manufacturer { get; init; }
@@ -807,6 +842,15 @@ public readonly struct RangeCapability(CapabilityID id, int defaultValue, int mi
     public int Min { get; } = min;
     public int Max { get; } = max;
     public int Step { get; } = step;
+
+    public override string ToString()
+    {
+        return $"{nameof(Id)}: {Id}," +
+               $" {nameof(DefaultValue)}: {DefaultValue}," +
+               $" {nameof(Min)}: {Min}," +
+               $" {nameof(Max)}: {Max}," +
+               $" {nameof(Step)}: {Step}";
+    }
 }
 
 [method: JsonConstructor]

@@ -28,6 +28,21 @@ public partial class OverclockDiscreteGPUSettingsWindow
 
         _coreLabel.Content = $"{(int)_coreSlider.Value:+0;-0;0} {Resource.MHz}";
         _memoryLabel.Content = $"{(int)_memorySlider.Value:+0;-0;0} {Resource.MHz}";
+
+        Loaded += OverclockDiscreteGPUSettingsWindow_Loaded;
+    }
+
+    private async void OverclockDiscreteGPUSettingsWindow_Loaded(object sender, RoutedEventArgs e)
+    {
+        var maxDeltaMhz = await GPUOverclockController.GetMaxDeltaMhzAsync();
+
+        _coreSlider.Maximum = maxDeltaMhz.CoreDeltaMhz;
+        if (_coreSlider.Value > _coreSlider.Maximum)
+            _coreSlider.Value = _coreSlider.Maximum;
+
+        _memorySlider.Maximum = maxDeltaMhz.MemoryDeltaMhz;
+        if (_memorySlider.Value > _memorySlider.Maximum)
+            _memorySlider.Value = _memorySlider.Maximum;
     }
 
     private void CoreSlider_OnValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e) => _coreLabel.Content = $"{(int)_coreSlider.Value:+0;-0;0} {Resource.MHz}";

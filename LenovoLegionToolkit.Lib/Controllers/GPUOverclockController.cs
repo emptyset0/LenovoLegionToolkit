@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Linq;
 using System.Threading.Tasks;
 using LenovoLegionToolkit.Lib.Listeners;
 using LenovoLegionToolkit.Lib.Settings;
@@ -15,6 +16,11 @@ namespace LenovoLegionToolkit.Lib.Controllers;
 
 public class GPUOverclockController
 {
+    private const int DefaultMaxCoreDeltaMhz = 500;
+    private const int DefaultMaxMemoryDeltaMhz = 2000;
+    private const int NvidiaGraphicsClockId = 0;
+    private const int NvidiaMemoryClockId = 4;
+
     private readonly GPUOverclockSettings _settings;
     private readonly VantageDisabler _vantageDisabler;
     private readonly LegionSpaceDisabler _legionSpaceDisabler;
@@ -40,6 +46,7 @@ public class GPUOverclockController
     public async Task<bool> IsSupportedAsync()
     {
         bool isSupported;
+        PhysicalGPU? gpu = null;
 
         try
         {
@@ -49,21 +56,25 @@ public class GPUOverclockController
             }
 
             NVAPI.Initialize();
-            isSupported = NVAPI.GetGPU() is not null;
+            gpu = NVAPI.GetGPU();
+            isSupported = gpu is not null;
         }
-        catch
+        catch (Exception ex)
         {
+            Log.Instance.Trace("NVAPI status check failed.", ex);
             isSupported = false;
         }
 
-        Log.Instance.Trace($"NVAPI status: {isSupported}.");
+        Log.Instance.Trace($"NVAPI status: {isSupported}. [gpu={gpu?.FullName ?? "null"}]");
 
         if (!isSupported)
             return isSupported;
 
         try
         {
-            isSupported = await WMI.LenovoGameZoneData.IsSupportGpuOCAsync().ConfigureAwait(false) > 0;
+            var supportGpuOc = await WMI.LenovoGameZoneData.IsSupportGpuOCAsync().ConfigureAwait(false);
+            isSupported = supportGpuOc > 0;
+            Log.Instance.Trace($"IsSupportGpuOC returned {supportGpuOc}.");
 
             if (!isSupported)
             {
@@ -73,9 +84,15 @@ public class GPUOverclockController
                 _settings.Store.Info = GPUOverclockInfo.Zero;
                 _settings.SynchronizeStore();
             }
+            else
+            {
+                var maxDeltaMhz = await GetMaxDeltaMhzAsync().ConfigureAwait(false);
+                Log.Instance.Trace($"GPU OC max delta: {maxDeltaMhz}.");
+            }
         }
-        catch
+        catch (Exception ex)
         {
+            Log.Instance.Trace("GPU OC support query failed.", ex);
             isSupported = false;
         }
 
@@ -155,9 +172,10 @@ public class GPUOverclockController
                 return;
             }
 
-            SetOverclockInfo(gpu, info);
+            var maxDeltaMhz = await GetMaxDeltaMhzAsync().ConfigureAwait(false);
+            SetOverclockInfo(gpu, info, maxDeltaMhz);
 
-            Log.Instance.Trace($"Applied overclock: {info}, current: {GetOverclockInfo(gpu)}.");
+            Log.Instance.Trace($"Applied overclock: {info}, max: {maxDeltaMhz}, current: {GetOverclockInfo(gpu)}.");
         }
         catch (Exception ex)
         {
@@ -192,14 +210,41 @@ public class GPUOverclockController
             await ApplyStateAsync().ConfigureAwait(false);
     }
 
-    public static int GetMaxCoreDeltaMhz() => 500;
+    public static int GetMaxCoreDeltaMhz() => DefaultMaxCoreDeltaMhz;
 
-    public static int GetMaxMemoryDeltaMhz() => 2000;
+    public static int GetMaxMemoryDeltaMhz() => DefaultMaxMemoryDeltaMhz;
 
-    private static void SetOverclockInfo(PhysicalGPU gpu, GPUOverclockInfo info)
+    public static async Task<GPUOverclockInfo> GetMaxDeltaMhzAsync()
     {
-        var coreDelta = Math.Clamp(info.CoreDeltaMhz, 0, GetMaxCoreDeltaMhz());
-        var memoryDelta = Math.Clamp(info.MemoryDeltaMhz, 0, GetMaxMemoryDeltaMhz());
+        var defaultMax = new GPUOverclockInfo(DefaultMaxCoreDeltaMhz, DefaultMaxMemoryDeltaMhz);
+
+        try
+        {
+            var capabilities = (await WMI.LenovoGpuOverclockingData.ReadAsync().ConfigureAwait(false)).ToArray();
+            if (capabilities.Length == 0)
+            {
+                Log.Instance.Trace("GPU OC capability data is empty. Using defaults.");
+                return defaultMax;
+            }
+
+            Log.Instance.Trace($"GPU OC capability data: {string.Join("; ", capabilities)}");
+
+            var core = GetMaxDeltaMhzFromCapabilities(capabilities, NvidiaGraphicsClockId, DefaultMaxCoreDeltaMhz, 1000);
+            var memory = GetMaxDeltaMhzFromCapabilities(capabilities, NvidiaMemoryClockId, DefaultMaxMemoryDeltaMhz, 5000);
+
+            return new(core, memory);
+        }
+        catch (Exception ex)
+        {
+            Log.Instance.Trace("GPU OC capability data unavailable. Using defaults.", ex);
+            return defaultMax;
+        }
+    }
+
+    private static void SetOverclockInfo(PhysicalGPU gpu, GPUOverclockInfo info, GPUOverclockInfo maxDeltaMhz)
+    {
+        var coreDelta = Math.Clamp(info.CoreDeltaMhz, 0, maxDeltaMhz.CoreDeltaMhz);
+        var memoryDelta = Math.Clamp(info.MemoryDeltaMhz, 0, maxDeltaMhz.MemoryDeltaMhz);
 
         var clockEntries = new[]
         {
@@ -211,6 +256,34 @@ public class GPUOverclockController
 
         var overclock = new PerformanceStates20InfoV1(performanceStateInfo, 2, 0);
         GPUApi.SetPerformanceStates20(gpu.Handle, overclock);
+    }
+
+    private static int GetMaxDeltaMhzFromCapabilities(GPUOverclockCapabilityData[] capabilities, int clockId, int fallback, int hardCap)
+    {
+        return capabilities
+            .Where(c => c.ClockId == clockId)
+            .Select(c => NormalizeDeltaMhz(c.MaxOffset, c.OffsetScale))
+            .Where(v => v > 0 && v <= hardCap)
+            .DefaultIfEmpty(fallback)
+            .Max();
+    }
+
+    private static int NormalizeDeltaMhz(int value, int scale)
+    {
+        if (value <= 0)
+            return 0;
+
+        if (scale > 1 && value % scale == 0)
+        {
+            var scaled = value / scale;
+            if (scaled > 0)
+                return scaled;
+        }
+
+        if (value >= 10000 && value % 1000 == 0)
+            return value / 1000;
+
+        return value;
     }
 
     private static GPUOverclockInfo GetOverclockInfo(PhysicalGPU gpu)

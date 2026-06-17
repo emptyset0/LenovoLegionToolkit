@@ -11,6 +11,8 @@ public static partial class WMI
 {
     public static class LenovoOtherMethod
     {
+        public static Task<bool> ExistsAsync() => WMI.ExistsAsync("root\\WMI", $"SELECT * FROM LENOVO_OTHER_METHOD");
+
         public static Task<int> GetSupportThermalModeAsync() => CallAsync("root\\WMI",
             $"SELECT * FROM LENOVO_OTHER_METHOD",
             "GetSupportThermalMode",
