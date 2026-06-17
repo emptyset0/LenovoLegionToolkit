@@ -22,6 +22,8 @@ public class GPUOverclockController
     private const int NvidiaGraphicsClockId = 0;
     private const int NvidiaMemoryClockId = 4;
     private const string YogaPro14sMachineType = "83BU";
+    private static readonly GPUOverclockInfo YogaPro14sDefaultDeltaMhz = new(150, 300);
+    private static readonly GPUOverclockInfo YogaPro14sMaxDeltaMhz = new(200, 400);
 
     private readonly GPUOverclockSettings _settings;
     private readonly VantageDisabler _vantageDisabler;
@@ -152,6 +154,18 @@ public class GPUOverclockController
             Log.Instance.Trace($"Forcing... [enabled=true, info={info}]");
         }
 
+        if (enabled && info == GPUOverclockInfo.Zero)
+        {
+            var defaultDeltaMhz = await GetDefaultDeltaMhzAsync().ConfigureAwait(false);
+            if (defaultDeltaMhz != GPUOverclockInfo.Zero)
+            {
+                info = defaultDeltaMhz;
+                _settings.Store.Info = info;
+                _settings.SynchronizeStore();
+                Log.Instance.Trace($"Using default overclock info: {info}.");
+            }
+        }
+
         if (!enabled)
         {
             Log.Instance.Trace($"Not enabled.");
@@ -219,8 +233,21 @@ public class GPUOverclockController
 
     public static int GetMaxMemoryDeltaMhz() => DefaultMaxMemoryDeltaMhz;
 
+    public static async Task<GPUOverclockInfo> GetDefaultDeltaMhzAsync()
+    {
+        return await IsYogaPro14s83BUAsync().ConfigureAwait(false)
+            ? YogaPro14sDefaultDeltaMhz
+            : GPUOverclockInfo.Zero;
+    }
+
     public static async Task<GPUOverclockInfo> GetMaxDeltaMhzAsync()
     {
+        if (await IsYogaPro14s83BUAsync().ConfigureAwait(false))
+        {
+            Log.Instance.Trace($"Using YogaPro 14s 83BU GPU OC max delta: {YogaPro14sMaxDeltaMhz}.");
+            return YogaPro14sMaxDeltaMhz;
+        }
+
         var defaultMax = new GPUOverclockInfo(DefaultMaxCoreDeltaMhz, DefaultMaxMemoryDeltaMhz);
 
         var capabilities = await ReadGpuOverclockCapabilitiesAsync().ConfigureAwait(false);
@@ -242,8 +269,7 @@ public class GPUOverclockController
     {
         try
         {
-            var machineInformation = await Compatibility.GetMachineInformationAsync().ConfigureAwait(false);
-            if (!machineInformation.MachineType.Equals(YogaPro14sMachineType, StringComparison.InvariantCultureIgnoreCase))
+            if (!await IsYogaPro14s83BUAsync().ConfigureAwait(false))
                 return false;
 
             var lenovoGpuOcClassExists = await WMI.LenovoGpuOverclockingData.ExistsClassAsync().ConfigureAwait(false);
@@ -257,6 +283,12 @@ public class GPUOverclockController
             Log.Instance.Trace($"YogaPro 14s 83BU GPU OC fallback check failed.", ex);
             return false;
         }
+    }
+
+    private static async Task<bool> IsYogaPro14s83BUAsync()
+    {
+        var machineInformation = await Compatibility.GetMachineInformationAsync().ConfigureAwait(false);
+        return machineInformation.MachineType.Equals(YogaPro14sMachineType, StringComparison.InvariantCultureIgnoreCase);
     }
 
     private static async Task<GPUOverclockCapabilityData[]> ReadGpuOverclockCapabilitiesAsync()

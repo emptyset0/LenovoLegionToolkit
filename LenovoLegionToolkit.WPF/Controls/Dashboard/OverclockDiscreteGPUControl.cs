@@ -113,6 +113,9 @@ public class OverclockDiscreteGPUControl : AbstractRefreshingControl
 
             var enabled = _toggle.IsChecked.Value;
             var (_, info) = _controller.GetState();
+            if (enabled && info == GPUOverclockInfo.Zero)
+                info = await GPUOverclockController.GetDefaultDeltaMhzAsync();
+
             _controller.SaveState(enabled, info);
             await _controller.ApplyStateAsync(true);
         }

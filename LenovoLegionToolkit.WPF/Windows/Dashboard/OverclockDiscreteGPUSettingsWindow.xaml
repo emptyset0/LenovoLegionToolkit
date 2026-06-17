@@ -7,9 +7,9 @@
     xmlns:utils="clr-namespace:LenovoLegionToolkit.WPF.Utils"
     xmlns:wpfui="http://schemas.lepo.co/wpfui/2022/xaml"
     Title="{x:Static resources:Resource.OverclockDiscreteGPUSettingsWindow_Title}"
-    MinWidth="510"
+    MinWidth="560"
     MinHeight="275"
-    MaxWidth="510"
+    MaxWidth="560"
     MaxHeight="275"
     FlowDirection="{x:Static utils:LocalizationHelper.Direction}"
     ResizeMode="NoResize"
@@ -61,9 +61,9 @@
                     <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="75" />
+                    <ColumnDefinition Width="84" />
+                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
 
                 <TextBlock
@@ -75,19 +75,30 @@
                     x:Name="_coreSlider"
                     Grid.Row="1"
                     Grid.Column="0"
-                    Grid.ColumnSpan="2"
                     Margin="0,16,8,0"
                     AutomationProperties.Name="{x:Static resources:Resource.OverclockDiscreteGPUSettingsWindow_CoreFrequencyOffset_Title}"
                     IsSnapToTickEnabled="True"
                     Minimum="0"
                     TickFrequency="1"
                     ValueChanged="CoreSlider_OnValueChanged" />
-                <Label
-                    x:Name="_coreLabel"
+                <wpfui:NumberBox
+                    x:Name="_coreNumberBox"
+                    Grid.Row="1"
+                    Grid.Column="1"
+                    Margin="8,8,4,0"
+                    AcceptsExpression="False"
+                    ClearButtonEnabled="False"
+                    HorizontalContentAlignment="Right"
+                    MaxDecimalPlaces="0"
+                    Minimum="0"
+                    TextChanged="CoreNumberBox_OnTextChanged"
+                    LostFocus="CoreNumberBox_OnLostFocus" />
+                <TextBlock
                     Grid.Row="1"
                     Grid.Column="2"
-                    Margin="-10,16,0,0"
-                    HorizontalContentAlignment="Right" />
+                    Margin="4,16,0,0"
+                    VerticalAlignment="Center"
+                    Text="{x:Static resources:Resource.MHz}" />
 
                 <TextBlock
                     Grid.Row="2"
@@ -99,19 +110,30 @@
                     x:Name="_memorySlider"
                     Grid.Row="3"
                     Grid.Column="0"
-                    Grid.ColumnSpan="2"
                     Margin="0,16,8,0"
                     AutomationProperties.Name="{x:Static resources:Resource.OverclockDiscreteGPUSettingsWindow_MemoryFrequencyOffset_Title}"
                     IsSnapToTickEnabled="True"
                     Minimum="0"
                     TickFrequency="1"
                     ValueChanged="MemorySlider_OnValueChanged" />
-                <Label
-                    x:Name="_memoryLabel"
+                <wpfui:NumberBox
+                    x:Name="_memoryNumberBox"
+                    Grid.Row="3"
+                    Grid.Column="1"
+                    Margin="8,8,4,0"
+                    AcceptsExpression="False"
+                    ClearButtonEnabled="False"
+                    HorizontalContentAlignment="Right"
+                    MaxDecimalPlaces="0"
+                    Minimum="0"
+                    TextChanged="MemoryNumberBox_OnTextChanged"
+                    LostFocus="MemoryNumberBox_OnLostFocus" />
+                <TextBlock
                     Grid.Row="3"
                     Grid.Column="2"
-                    Margin="-10,16,0,0"
-                    HorizontalContentAlignment="Right" />
+                    Margin="4,16,0,0"
+                    VerticalAlignment="Center"
+                    Text="{x:Static resources:Resource.MHz}" />
             </Grid>
 
             <Grid
