@@ -61,7 +61,7 @@ public class GPUOverclockController
         }
         catch (Exception ex)
         {
-            Log.Instance.Trace("NVAPI status check failed.", ex);
+            Log.Instance.Trace($"NVAPI status check failed.", ex);
             isSupported = false;
         }
 
@@ -92,7 +92,7 @@ public class GPUOverclockController
         }
         catch (Exception ex)
         {
-            Log.Instance.Trace("GPU OC support query failed.", ex);
+            Log.Instance.Trace($"GPU OC support query failed.", ex);
             isSupported = false;
         }
 
@@ -223,7 +223,7 @@ public class GPUOverclockController
             var capabilities = (await WMI.LenovoGpuOverclockingData.ReadAsync().ConfigureAwait(false)).ToArray();
             if (capabilities.Length == 0)
             {
-                Log.Instance.Trace("GPU OC capability data is empty. Using defaults.");
+                Log.Instance.Trace($"GPU OC capability data is empty. Using defaults.");
                 return defaultMax;
             }
 
@@ -236,7 +236,7 @@ public class GPUOverclockController
         }
         catch (Exception ex)
         {
-            Log.Instance.Trace("GPU OC capability data unavailable. Using defaults.", ex);
+            Log.Instance.Trace($"GPU OC capability data unavailable. Using defaults.", ex);
             return defaultMax;
         }
     }
