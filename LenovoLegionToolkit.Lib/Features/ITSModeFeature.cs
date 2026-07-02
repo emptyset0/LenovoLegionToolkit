@@ -167,13 +167,21 @@ public partial class ITSModeFeature : IFeature<ITSMode>
                 ITSMode.MmcGeek
             };
 
+            var supportedStates = await GetAllStatesAsync().ConfigureAwait(false);
             var isConnected = await Power.IsPowerAdapterConnectedAsync().ConfigureAwait(false) == PowerAdapterStatus.Connected;
 
             var availableStates = desiredSequence
+                .Where(state => supportedStates.Contains(state))
                 .Where(state => isConnected || state != ITSMode.MmcGeek)
                 .ToArray();
 
-            if (availableStates.Length == 0) return ITSMode.None;
+            Log.Instance.Trace($"ITS mode toggle state: current={currentState}, isAcConnected={isConnected}, supportedStates=[{string.Join(", ", supportedStates)}], availableStates=[{string.Join(", ", availableStates)}]");
+
+            if (availableStates.Length == 0)
+            {
+                Log.Instance.Trace($"No ITS modes are available for Fn+Q toggle.");
+                return ITSMode.None;
+            }
 
             ITSMode nextState;
 
